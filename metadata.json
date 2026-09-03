@@ -1,0 +1,6 @@
+{
+  "name": "Game Kuis Quizizz & Leaderboard",
+  "description": "Game kuis interaktif seru ala Quizizz dengan live leaderboard, timer skor kecepatan, streak multiplier, avatar, dan efek suara.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
