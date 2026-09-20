@@ -11,9 +11,15 @@ import {
   Sparkles,
   LogOut,
   Users,
+  Swords,
+  Mountain,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
-import { Question, Competitor, PowerUp } from '../types';
+import { Question, Competitor, PowerUp, GameMode } from '../types';
 import { sound } from '../utils/audio';
+import { TugOfWarArena } from './TugOfWarArena';
+import { MountainClimbArena } from './MountainClimbArena';
 
 interface QuizScreenProps {
   currentQuestion: Question;
@@ -24,6 +30,8 @@ interface QuizScreenProps {
   streak: number;
   competitors: Competitor[];
   powerUps: PowerUp[];
+  gameMode?: GameMode;
+  humanTeam?: 'left' | 'right';
   onUsePowerUp: (id: PowerUp['id']) => void;
   onSelectAnswer: (optionIndex: number | null, timeSpentMs: number) => void;
   onQuitGame: () => void;
@@ -73,6 +81,8 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({
   streak,
   competitors,
   powerUps,
+  gameMode = 'classic',
+  humanTeam = 'left',
   onUsePowerUp,
   onSelectAnswer,
   onQuitGame,
@@ -83,6 +93,7 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({
   const [eliminatedIndices, setEliminatedIndices] = useState<number[]>([]);
   const [showLiveLeaderboard, setShowLiveLeaderboard] = useState<boolean>(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState<boolean>(false);
+  const [showArenaWidget, setShowArenaWidget] = useState<boolean>(true);
 
   // Time calculation
   useEffect(() => {
@@ -92,33 +103,34 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({
     setEliminatedIndices([]);
   }, [currentQuestion, timePerQuestion]);
 
-  // Main countdown timer
-  useEffect(() => {
-    if (answered) return;
-
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          handleTimeOut();
-          return 0;
-        }
-        if (prev <= 4) {
-          sound.playCountdownTick();
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [answered, currentQuestion]);
-
   const handleTimeOut = useCallback(() => {
     if (answered) return;
     setAnswered(true);
     sound.playWrong();
     onSelectAnswer(null, timePerQuestion * 1000);
   }, [answered, onSelectAnswer, timePerQuestion]);
+
+  // Main countdown timer
+  useEffect(() => {
+    if (answered) return;
+
+    if (timeLeft <= 0) {
+      handleTimeOut();
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setTimeLeft((prev) => {
+        const next = prev - 1;
+        if (next <= 4 && next > 0) {
+          sound.playCountdownTick();
+        }
+        return next;
+      });
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [answered, timeLeft, handleTimeOut]);
 
   const handlePickOption = (index: number) => {
     if (answered || eliminatedIndices.includes(index)) return;
@@ -186,19 +198,58 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({
 
             {/* Streak Multiplier */}
             {streak > 0 && (
-              <motion.div
-                initial={{ scale: 0.8 }}
-                animate={{ scale: 1 }}
-                className="flex items-center gap-1 rounded-xl border border-amber-500/40 bg-amber-500/10 px-2.5 py-1.5 text-xs font-extrabold text-amber-300"
+              <div
+                id="streak-counter-badge"
+                key={streak}
+                className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-extrabold transition-all duration-300 ${
+                  streak >= 3
+                    ? 'border-amber-400 bg-gradient-to-r from-amber-500/25 via-orange-500/20 to-rose-500/25 text-amber-200 animate-streak-active'
+                    : 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                }`}
               >
-                <Flame className="h-4 w-4 fill-amber-400 text-amber-400 animate-bounce" />
+                <Flame
+                  className={`h-4 w-4 ${
+                    streak >= 3
+                      ? 'fill-amber-400 text-orange-400 animate-bounce drop-shadow-[0_0_8px_rgba(251,191,36,0.9)]'
+                      : 'fill-amber-400 text-amber-400 animate-bounce'
+                  }`}
+                />
                 <span>Streak {streak}x</span>
-              </motion.div>
+                {streak >= 3 && (
+                  <span className="rounded-md border border-amber-400/40 bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-200">
+                    ON FIRE!
+                  </span>
+                )}
+              </div>
             )}
           </div>
 
           {/* Current Live Rank & Score */}
           <div className="flex items-center gap-2">
+            {/* Game Mode Pill & Arena Toggle */}
+            {gameMode !== 'classic' && (
+              <button
+                id="btn-toggle-arena-view"
+                onClick={() => setShowArenaWidget(!showArenaWidget)}
+                className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs font-bold transition ${
+                  gameMode === 'tug_of_war'
+                    ? 'border-rose-500/40 bg-rose-500/15 text-rose-300 hover:bg-rose-500/25'
+                    : 'border-indigo-500/40 bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/25'
+                }`}
+                title={showArenaWidget ? 'Sembunyikan Arena Mode' : 'Tampilkan Arena Mode'}
+              >
+                <span>{gameMode === 'tug_of_war' ? '🪢' : '🏔️'}</span>
+                <span className="hidden md:inline">
+                  {gameMode === 'tug_of_war' ? 'Tarik Tambang' : 'Naik Gunung'}
+                </span>
+                {showArenaWidget ? (
+                  <Eye className="h-3 w-3 opacity-60 ml-0.5" />
+                ) : (
+                  <EyeOff className="h-3 w-3 opacity-60 ml-0.5" />
+                )}
+              </button>
+            )}
+
             <button
               id="btn-toggle-live-leaderboard"
               onClick={() => {
@@ -263,6 +314,34 @@ export const QuizScreen: React.FC<QuizScreenProps> = ({
           </span>
         </div>
       </div>
+
+      {/* Mode Arena Widget (Tarik Tambang or Naik Gunung) */}
+      {showArenaWidget && gameMode === 'tug_of_war' && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="pt-2"
+        >
+          <TugOfWarArena
+            competitors={competitors}
+            humanTeam={humanTeam}
+            compact={true}
+          />
+        </motion.div>
+      )}
+
+      {showArenaWidget && gameMode === 'mountain_climb' && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="pt-2"
+        >
+          <MountainClimbArena
+            competitors={competitors}
+            compact={true}
+          />
+        </motion.div>
+      )}
 
       {/* Center: Main Question Card */}
       <motion.div

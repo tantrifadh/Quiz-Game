@@ -11,7 +11,7 @@ import {
   Sparkles,
   ChevronRight,
 } from 'lucide-react';
-import { Question } from '../types';
+import { Question, GameMode } from '../types';
 import { sound } from '../utils/audio';
 
 interface AnswerFeedbackModalProps {
@@ -27,6 +27,8 @@ interface AnswerFeedbackModalProps {
   currentRank: number;
   previousRank: number;
   totalScore: number;
+  gameMode?: GameMode;
+  humanTeam?: 'left' | 'right';
   onNextQuestion: () => void;
   isLastQuestion: boolean;
 }
@@ -44,25 +46,34 @@ export const AnswerFeedbackModal: React.FC<AnswerFeedbackModalProps> = ({
   currentRank,
   previousRank,
   totalScore,
+  gameMode = 'classic',
+  humanTeam = 'left',
   onNextQuestion,
   isLastQuestion,
 }) => {
   const [secondsRemaining, setSecondsRemaining] = useState<number>(3);
+  const calledRef = React.useRef(false);
+  const onNextQuestionRef = React.useRef(onNextQuestion);
+  onNextQuestionRef.current = onNextQuestion;
+
+  const handleNext = React.useCallback(() => {
+    if (calledRef.current) return;
+    calledRef.current = true;
+    onNextQuestionRef.current();
+  }, []);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setSecondsRemaining((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          onNextQuestion();
-          return 0;
-        }
-        return prev - 1;
-      });
+    if (secondsRemaining <= 0) {
+      handleNext();
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setSecondsRemaining((prev) => prev - 1);
     }, 1000);
 
-    return () => clearInterval(timer);
-  }, [onNextQuestion]);
+    return () => clearTimeout(timer);
+  }, [secondsRemaining, handleNext]);
 
   const rankDiff = previousRank - currentRank; // positive means moved up (e.g. from 4 to 2 => +2)
 
@@ -192,12 +203,65 @@ export const AnswerFeedbackModal: React.FC<AnswerFeedbackModalProps> = ({
             </div>
           )}
 
+          {/* Mode-Specific Impact Badge */}
+          {gameMode === 'tug_of_war' && (
+            <div
+              className={`flex items-center justify-between rounded-xl border p-2.5 text-xs font-bold ${
+                isCorrect
+                  ? humanTeam === 'left'
+                    ? 'border-rose-500/40 bg-rose-500/15 text-rose-200'
+                    : 'border-blue-500/40 bg-blue-500/15 text-blue-200'
+                  : 'border-slate-800 bg-slate-900/90 text-slate-400'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-base">🪢</span>
+                <span>
+                  {isCorrect
+                    ? `Tarikan Tambang: +${pointsEarned} Poin untuk ${
+                        humanTeam === 'left' ? 'Tim Kiri (Garuda 🦅)' : 'Tim Kanan (Harimau 🐅)'
+                      }!`
+                    : 'Tali tertahan! Bersiap tarik kembali di soal berikutnya!'}
+                </span>
+              </div>
+              {isCorrect && (
+                <span className="font-mono text-emerald-400 font-extrabold uppercase text-[10px]">
+                  +TARIK!
+                </span>
+              )}
+            </div>
+          )}
+
+          {gameMode === 'mountain_climb' && (
+            <div
+              className={`flex items-center justify-between rounded-xl border p-2.5 text-xs font-bold ${
+                isCorrect
+                  ? 'border-indigo-500/40 bg-indigo-500/15 text-indigo-200'
+                  : 'border-slate-800 bg-slate-900/90 text-slate-400'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-base">🏔️</span>
+                <span>
+                  {isCorrect
+                    ? `Pendakian Sukses: +${Math.round(pointsEarned * 0.4)} MDPL menuju Puncak Mahameru!`
+                    : 'Pendakian tertahan, atur nafas dan siapkan soal berikutnya!'}
+                </span>
+              </div>
+              {isCorrect && (
+                <span className="font-mono text-amber-300 font-extrabold uppercase text-[10px]">
+                  NAIK 🚩
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Action Button */}
           <button
             id="btn-next-question-immediate"
             onClick={() => {
               sound.playClick();
-              onNextQuestion();
+              handleNext();
             }}
             className="w-full flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 py-3.5 text-sm font-extrabold text-white shadow-lg shadow-purple-600/30 hover:opacity-95 transition active:scale-98"
           >

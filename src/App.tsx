@@ -15,12 +15,14 @@ import {
   AnswerLog,
   GamePhase,
   LeaderboardRecord,
+  GameMode,
 } from './types';
 import {
   DEFAULT_QUESTIONS,
   BOT_PLAYERS,
   CATEGORIES,
 } from './data/quizData';
+import { BUILTIN_QUIZ_PACKAGES } from './data/quizPackages';
 import {
   getStoredLeaderboard,
   saveLeaderboardRecord,
@@ -46,6 +48,8 @@ export default function App() {
 
   // Active Game State
   const [gamePhase, setGamePhase] = useState<GamePhase>('lobby');
+  const [gameMode, setGameMode] = useState<GameMode>('tug_of_war');
+  const [humanTeam, setHumanTeam] = useState<'left' | 'right'>('left');
   const [activeCategoryTitle, setActiveCategoryTitle] = useState<string>('Pengetahuan Umum');
   const [gameQuestions, setGameQuestions] = useState<Question[]>([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(0);
@@ -128,26 +132,40 @@ export default function App() {
     questionCount,
     timePerQuestion: timeLimit,
     opponentCount,
+    selectedQuestions: customSelectedQuestions,
+    quizTitle,
+    gameMode: selectedGameMode = 'tug_of_war',
+    humanTeam: selectedHumanTeam = 'left',
   }: {
-    category: QuestionCategory | 'all';
+    category: string;
     questionCount: number;
     timePerQuestion: number;
     opponentCount: number;
+    selectedQuestions?: Question[];
+    quizTitle?: string;
+    gameMode?: GameMode;
+    humanTeam?: 'left' | 'right';
   }) => {
+    setGameMode(selectedGameMode);
+    setHumanTeam(selectedHumanTeam);
     // Filter questions
     let pool: Question[] = [];
-    let title = 'Campuran Semua Topik';
+    let title = quizTitle || 'Kuis Kelas Interaktif';
 
-    if (category === 'custom') {
+    if (customSelectedQuestions && customSelectedQuestions.length > 0) {
+      pool = [...customSelectedQuestions];
+    } else if (category === 'custom-my' || category === 'custom') {
       pool = [...customQuestions];
-      title = 'Soal Buatan Sendiri';
-    } else if (category === 'all') {
-      pool = [...DEFAULT_QUESTIONS, ...customQuestions];
-      title = 'Semua Kategori (Acak)';
+      title = 'Kuis Kustom Saya';
     } else {
-      pool = DEFAULT_QUESTIONS.filter((q) => q.category === category);
-      const meta = CATEGORIES.find((c) => c.id === category);
-      if (meta) title = meta.name;
+      const builtinPkg = BUILTIN_QUIZ_PACKAGES.find((p) => p.id === category);
+      if (builtinPkg) {
+        pool = [...builtinPkg.questions];
+        title = builtinPkg.title;
+      } else {
+        pool = [...DEFAULT_QUESTIONS];
+        title = 'Pengetahuan Umum';
+      }
     }
 
     if (pool.length === 0) {
@@ -159,8 +177,13 @@ export default function App() {
     const shuffled = [...pool].sort(() => 0.5 - Math.random());
     const selectedQuestions = shuffled.slice(0, Math.min(questionCount, shuffled.length));
 
-    // Setup Competitors: Human + selected bots
+    // Setup Competitors: Human + selected bots (e.g. 36 students in class)
+    // For Tarik Tambang: divide players into 2 balanced teams (left & right)
     const shuffledBots = [...BOT_PLAYERS].sort(() => 0.5 - Math.random()).slice(0, opponentCount);
+    const totalCompetitors = 1 + shuffledBots.length;
+    const targetLeftTeamCount = Math.ceil(totalCompetitors / 2);
+    let assignedLeftCount = selectedHumanTeam === 'left' ? 1 : 0;
+
     const initialCompetitors: Competitor[] = [
       {
         id: 'player-human',
@@ -172,18 +195,37 @@ export default function App() {
         isHuman: true,
         accuracyRate: 1.0,
         speedWeight: 1.0,
+        correctCount: 0,
+        wrongCount: 0,
+        answers: [],
+        team: selectedHumanTeam,
+        altitudeMeters: 0,
+        climbProgress: 0,
       },
-      ...shuffledBots.map((bot, idx) => ({
-        id: `bot-${idx}`,
-        name: bot.name,
-        avatar: bot.avatar,
-        avatarBg: bot.avatarBg,
-        score: 0,
-        streak: 0,
-        isHuman: false,
-        accuracyRate: bot.accuracyRate,
-        speedWeight: bot.speedWeight,
-      })),
+      ...shuffledBots.map((bot, idx) => {
+        let botTeam: 'left' | 'right' = 'right';
+        if (assignedLeftCount < targetLeftTeamCount) {
+          botTeam = 'left';
+          assignedLeftCount++;
+        }
+        return {
+          id: `bot-${idx}`,
+          name: bot.name,
+          avatar: bot.avatar,
+          avatarBg: bot.avatarBg,
+          score: 0,
+          streak: 0,
+          isHuman: false,
+          accuracyRate: bot.accuracyRate,
+          speedWeight: bot.speedWeight,
+          correctCount: 0,
+          wrongCount: 0,
+          answers: [],
+          team: botTeam,
+          altitudeMeters: 0,
+          climbProgress: 0,
+        };
+      }),
     ];
 
     // Reset power-ups
@@ -271,40 +313,87 @@ export default function App() {
     setScore(newScore);
     setStreak(newStreak);
 
+    // Trigger Mode-Specific Sound Effects
+    if (gameMode === 'tug_of_war') {
+      sound.playTugPull();
+    } else if (gameMode === 'mountain_climb' && isCorrect) {
+      sound.playMountainStep();
+    }
+
     // Reset single-turn power-up buffs
     setIsDoubleScoreActive(false);
     setIsStreakShieldActive(false);
 
+    // Max expected score for altitude scaling (3676m Puncak Mahameru)
+    const expectedMaxScore = Math.max(1000, gameQuestions.length * 850);
+
     // Simulate competitor bots' answers for this question
     const updatedCompetitors = competitors.map((c) => {
       if (c.isHuman) {
+        const existingAnswers = c.answers || [];
+        const humanClimbProgress = Math.min(100, Math.round((newScore / expectedMaxScore) * 100));
+        const humanAltitude = Math.min(3676, Math.round((humanClimbProgress / 100) * 3676));
+
         return {
           ...c,
           score: newScore,
           streak: newStreak,
+          correctCount: (c.correctCount || 0) + (isCorrect ? 1 : 0),
+          wrongCount: (c.wrongCount || 0) + (isCorrect ? 0 : 1),
+          altitudeMeters: humanAltitude,
+          climbProgress: humanClimbProgress,
+          answers: [
+            ...existingAnswers,
+            {
+              questionId: question.id,
+              isCorrect,
+              selectedOptionIndex: optionIndex,
+              timeSpentMs,
+            },
+          ],
         };
       }
 
-      // Bot logic
+      // Bot student logic
       const willBeCorrect = Math.random() < c.accuracyRate;
-      if (willBeCorrect) {
-        const botTimeSpent = (timePerQuestion * 0.2 + Math.random() * timePerQuestion * 0.6) * c.speedWeight;
-        const botFraction = Math.max(0, 1 - botTimeSpent / timePerQuestion);
-        const botBase = 600;
-        const botSpeed = Math.round(botFraction * 320);
-        const botStreakPts = c.streak * 70;
-        const botGained = botBase + botSpeed + botStreakPts;
-        return {
-          ...c,
-          score: c.score + botGained,
-          streak: c.streak + 1,
-        };
-      } else {
-        return {
-          ...c,
-          streak: 0,
-        };
+      const botTimeSpent = (timePerQuestion * 0.2 + Math.random() * timePerQuestion * 0.6) * c.speedWeight;
+      const botFraction = Math.max(0, 1 - botTimeSpent / timePerQuestion);
+      const botBase = 600;
+      const botSpeed = Math.round(botFraction * 320);
+      const botStreakPts = c.streak * 70;
+      const botGained = willBeCorrect ? botBase + botSpeed + botStreakPts : 0;
+      const nextScore = c.score + botGained;
+      const nextStreak = willBeCorrect ? c.streak + 1 : 0;
+
+      const botClimbProgress = Math.min(100, Math.round((nextScore / expectedMaxScore) * 100));
+      const botAltitude = Math.min(3676, Math.round((botClimbProgress / 100) * 3676));
+
+      // Simulate bot's option choice
+      let botChosenIndex = question.correctIndex;
+      if (!willBeCorrect) {
+        const wrongIndices = [0, 1, 2, 3].filter((i) => i !== question.correctIndex);
+        botChosenIndex = wrongIndices[Math.floor(Math.random() * wrongIndices.length)] ?? 0;
       }
+
+      const existingAnswers = c.answers || [];
+      return {
+        ...c,
+        score: nextScore,
+        streak: nextStreak,
+        correctCount: (c.correctCount || 0) + (willBeCorrect ? 1 : 0),
+        wrongCount: (c.wrongCount || 0) + (willBeCorrect ? 0 : 1),
+        altitudeMeters: botAltitude,
+        climbProgress: botClimbProgress,
+        answers: [
+          ...existingAnswers,
+          {
+            questionId: question.id,
+            isCorrect: willBeCorrect,
+            selectedOptionIndex: botChosenIndex,
+            timeSpentMs: Math.round(botTimeSpent * 1000),
+          },
+        ],
+      };
     });
 
     // Determine rankings
@@ -424,8 +513,10 @@ export default function App() {
             profile={profile}
             onUpdateProfile={handleUpdateProfile}
             onStartGame={handleStartGame}
-            customQuestionsCount={customQuestions.length}
+            customQuestions={customQuestions}
             onOpenCustomQuiz={() => setShowCustomQuizModal(true)}
+            onDeleteCustomQuestion={handleDeleteCustomQuestion}
+            onAddCustomQuestion={handleAddCustomQuestion}
           />
         )}
 
@@ -439,6 +530,8 @@ export default function App() {
             streak={streak}
             competitors={competitors}
             powerUps={powerUps}
+            gameMode={gameMode}
+            humanTeam={humanTeam}
             onUsePowerUp={handleUsePowerUp}
             onSelectAnswer={handleSelectAnswer}
             onQuitGame={handleQuitGame}
@@ -459,6 +552,8 @@ export default function App() {
             currentRank={currentRank}
             previousRank={previousRank}
             totalScore={score}
+            gameMode={gameMode}
+            humanTeam={humanTeam}
             onNextQuestion={handleNextQuestion}
             isLastQuestion={currentQuestionIndex >= gameQuestions.length - 1}
           />
@@ -469,12 +564,20 @@ export default function App() {
             competitors={competitors}
             answerLogs={answerLogs}
             categoryTitle={activeCategoryTitle}
+            gameQuestions={gameQuestions}
+            timePerQuestion={timePerQuestion}
+            gameMode={gameMode}
+            humanTeam={humanTeam}
             onPlayAgain={() => {
               handleStartGame({
-                category: 'all',
+                category: 'active',
                 questionCount: gameQuestions.length,
                 timePerQuestion,
                 opponentCount: competitors.filter((c) => !c.isHuman).length,
+                selectedQuestions: gameQuestions,
+                quizTitle: activeCategoryTitle,
+                gameMode,
+                humanTeam,
               });
             }}
             onGoHome={() => setGamePhase('lobby')}

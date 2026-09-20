@@ -32,6 +32,15 @@ export interface PlayerProfile {
   avatarBg: string;
 }
 
+export type GameMode = 'classic' | 'tug_of_war' | 'mountain_climb';
+
+export interface CompetitorAnswer {
+  questionId: string;
+  isCorrect: boolean;
+  selectedOptionIndex: number | null;
+  timeSpentMs: number;
+}
+
 export interface Competitor {
   id: string;
   name: string;
@@ -42,6 +51,22 @@ export interface Competitor {
   isHuman: boolean;
   accuracyRate: number; // 0.0 - 1.0 likelihood of answering right
   speedWeight: number; // 0.6 - 1.2 speed variance
+  correctCount?: number;
+  wrongCount?: number;
+  answers?: CompetitorAnswer[];
+  team?: 'left' | 'right'; // For Tug of War mode: Tim Kiri vs Tim Kanan
+  altitudeMeters?: number; // For Mountain Climb mode: in MDPL (e.g. 0 - 3676m)
+  climbProgress?: number; // 0 to 100%
+}
+
+export interface QuizPackage {
+  id: string;
+  title: string;
+  description: string;
+  icon?: string;
+  badgeColor?: string;
+  isBuiltIn?: boolean;
+  questions: Question[];
 }
 
 export interface LeaderboardRecord {
