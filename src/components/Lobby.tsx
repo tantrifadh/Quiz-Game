@@ -645,13 +645,22 @@ export const Lobby: React.FC<LobbyProps> = ({
             {/* 3 Mode Selection Cards */}
             <div className="space-y-2.5">
               {/* Option 1: Mode Tarik Tambang */}
-              <button
+              <div
                 id="btn-mode-tug-of-war"
+                role="button"
+                tabIndex={0}
                 onClick={() => {
                   sound.playClick();
                   setGameMode('tug_of_war');
                 }}
-                className={`w-full text-left rounded-2xl border p-3.5 transition-all ${
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    sound.playClick();
+                    setGameMode('tug_of_war');
+                  }
+                }}
+                className={`w-full text-left rounded-2xl border p-3.5 transition-all cursor-pointer select-none ${
                   gameMode === 'tug_of_war'
                     ? 'border-rose-500 bg-gradient-to-r from-rose-950/40 via-slate-900 to-cyan-950/40 shadow-lg shadow-rose-500/20 ring-1 ring-rose-500'
                     : 'border-slate-800 bg-slate-950/60 hover:border-slate-700 hover:bg-slate-800/40'
@@ -703,6 +712,7 @@ export const Lobby: React.FC<LobbyProps> = ({
 
                     <div className="grid grid-cols-2 gap-2 pt-1">
                       <button
+                        type="button"
                         id="btn-team-left"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -720,6 +730,7 @@ export const Lobby: React.FC<LobbyProps> = ({
                       </button>
 
                       <button
+                        type="button"
                         id="btn-team-right"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -738,16 +749,25 @@ export const Lobby: React.FC<LobbyProps> = ({
                     </div>
                   </motion.div>
                 )}
-              </button>
+              </div>
 
               {/* Option 2: Mode Naik Gunung */}
-              <button
+              <div
                 id="btn-mode-mountain-climb"
+                role="button"
+                tabIndex={0}
                 onClick={() => {
                   sound.playClick();
                   setGameMode('mountain_climb');
                 }}
-                className={`w-full text-left rounded-2xl border p-3.5 transition-all ${
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    sound.playClick();
+                    setGameMode('mountain_climb');
+                  }
+                }}
+                className={`w-full text-left rounded-2xl border p-3.5 transition-all cursor-pointer select-none ${
                   gameMode === 'mountain_climb'
                     ? 'border-indigo-500 bg-gradient-to-r from-indigo-950/50 via-slate-900 to-purple-950/40 shadow-lg shadow-indigo-500/20 ring-1 ring-indigo-500'
                     : 'border-slate-800 bg-slate-950/60 hover:border-slate-700 hover:bg-slate-800/40'
@@ -797,16 +817,25 @@ export const Lobby: React.FC<LobbyProps> = ({
                     </span>
                   </motion.div>
                 )}
-              </button>
+              </div>
 
               {/* Option 3: Mode Klasik Leaderboard */}
-              <button
+              <div
                 id="btn-mode-classic"
+                role="button"
+                tabIndex={0}
                 onClick={() => {
                   sound.playClick();
                   setGameMode('classic');
                 }}
-                className={`w-full text-left rounded-2xl border p-3.5 transition-all ${
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    sound.playClick();
+                    setGameMode('classic');
+                  }
+                }}
+                className={`w-full text-left rounded-2xl border p-3.5 transition-all cursor-pointer select-none ${
                   gameMode === 'classic'
                     ? 'border-purple-500 bg-purple-950/30 shadow-lg shadow-purple-500/20 ring-1 ring-purple-500'
                     : 'border-slate-800 bg-slate-950/60 hover:border-slate-700 hover:bg-slate-800/40'
@@ -836,7 +865,7 @@ export const Lobby: React.FC<LobbyProps> = ({
                     {gameMode === 'classic' && <div className="h-1.5 w-1.5 rounded-full bg-white" />}
                   </div>
                 </div>
-              </button>
+              </div>
             </div>
           </div>
 
